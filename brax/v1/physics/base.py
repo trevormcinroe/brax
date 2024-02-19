@@ -1,4 +1,4 @@
-# Copyright 2024 The Brax Authors.
+# Copyright 2022 The Brax Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
 
 """Core brax structs and some conversion and slicing functions."""
 
-import copy
-from typing import Optional, Sequence, Tuple, Union
-import warnings
+import os
+from typing import Optional, Sequence, Tuple
 
 from brax.v1 import jumpy as jp
 from brax.v1 import math
-from brax.v1.io import mesh
+from brax.v1.io import file
 from brax.v1.physics import config_pb2
 from flax import struct
+from trimesh.exchange.load import load_mesh
 
 
 @struct.dataclass
@@ -44,7 +44,7 @@ class Q(object):
     elif isinstance(o, QP):
       return QP(self.pos + o.pos, self.rot + o.rot, o.vel, o.ang)
     else:
-      raise ValueError('add only supported for P, Q, QP')
+      raise ValueError("add only supported for P, Q, QP")
 
 
 @struct.dataclass
@@ -66,7 +66,7 @@ class P(object):
     elif isinstance(o, QP):
       return QP(o.pos, o.rot, self.vel + o.vel, self.ang + o.ang)
     else:
-      raise ValueError('add only supported for P, Q, QP')
+      raise ValueError("add only supported for P, Q, QP")
 
   def __mul__(self, o):
     return P(self.vel * o, self.ang * o)
@@ -96,7 +96,7 @@ class QP(object):
       return QP(self.pos + o.pos, self.rot + o.rot, self.vel + o.vel,
                 self.ang + o.ang)
     else:
-      raise ValueError('add only supported for P, Q, QP')
+      raise ValueError("add only supported for P, Q, QP")
 
   def __mul__(self, o):
     return QP(self.pos * o, self.rot * o, self.vel * o, self.ang * o)
@@ -141,37 +141,27 @@ class Info(object):
     contact: External contact forces applied at a step
     joint: Joint constraint forces applied at a step
     actuator: Actuator forces applied at a step
-    contact_pos: Contact point position in world coordinates.
-    contact_normal: Contact normal.
-    contact_penetration: Contact penetration.
   """
   contact: P
-  joint: Union[P, Q]
+  joint: P
   actuator: P
-  contact_pos: jp.ndarray
-  contact_normal: jp.ndarray
-  contact_penetration: jp.ndarray
 
 
 def validate_config(
     config: config_pb2.Config,
     resource_paths: Optional[Sequence[str]] = None) -> config_pb2.Config:
   """Validate and normalize config settings for use in systems."""
-  config = copy.deepcopy(config)
-
   if config.dt <= 0:
-    raise ValueError('config.dt must be positive')
+    raise RuntimeError("config.dt must be positive")
 
   if config.substeps == 0:
     config.substeps = 1
-
-  config.solver_scale_collide = config.solver_scale_collide or 1.0
 
   def find_dupes(objs):
     names = set()
     for obj in objs:
       if obj.name in names:
-        raise RuntimeError(f'duplicate name in config: {obj.name}')
+        raise RuntimeError(f"duplicate name in config: {obj.name}")
       names.add(obj.name)
 
   find_dupes(config.bodies)
@@ -179,36 +169,32 @@ def validate_config(
   find_dupes(config.actuators)
   find_dupes(config.mesh_geometries)
 
-  if config.dynamics_mode == 'legacy_spring':
-    if any(j.stiffness == 0 for j in config.joints):
-      raise ValueError(
-          'joint.stiffness must be >0 when dynamics_mode == legacy_spring')
-  elif config.dynamics_mode == 'pbd':
-    if any(j.stiffness != 0 for j in config.joints):
-      raise ValueError('joint.stiffness is invalid when dynamics_mode == pbd')
-    if config.baumgarte_erp:
-      raise ValueError('baumgarte_erp is invalid when dynamics_mode == pbd')
-  elif any(j.stiffness != 0 for j in config.joints):
-    config.dynamics_mode = 'legacy_spring'
-    warnings.warn('dynamics_mode not specified, but joint.stiffness >0. '
-                  'Setting dynamics_mode="legacy_spring".')
-  else:
-    config.dynamics_mode = 'pbd'
-    warnings.warn(
-        'dynamics_mode either not specified or not recognized, defaulting to '
-        '"pbd".  If you wish to preserve legacy behavior used in previous '
-        'versions of Brax, set dynamics_mode="legacy_spring".'
-    )
-
   # Load the meshes.
   if resource_paths is None:
-    resource_paths = ['']
-  for i in range(len(config.mesh_geometries)):
-    path = config.mesh_geometries[i].path
-    if not path:
-      continue
-    mesh_geom = mesh.load(config.mesh_geometries[i].name, path, resource_paths)
-    config.mesh_geometries[i].CopyFrom(mesh_geom)
+    resource_paths = [""]
+  for mesh_geom in config.mesh_geometries:
+    if mesh_geom.path:
+      # Clear the vertices and faces, if any.
+      del mesh_geom.vertices[:]
+      del mesh_geom.faces[:]
+      found = False
+      for resource_path in resource_paths:
+        path = os.path.join(resource_path, mesh_geom.path)
+        if not file.Exists(path):
+          continue
+        with file.File(path, "rb") as f:
+          trimesh = load_mesh(f, file_type=str(mesh_geom.path))
+          for v in trimesh.vertices:
+            mesh_geom.vertices.add(x=v[0], y=v[1], z=v[2])
+          mesh_geom.faces.extend(trimesh.faces.flatten())
+          for v in trimesh.vertex_normals:
+            mesh_geom.vertex_normals.add(x=v[0], y=v[1], z=v[2])
+          for v in trimesh.face_normals:
+            mesh_geom.face_normals.add(x=v[0], y=v[1], z=v[2])
+        found = True
+        break
+      assert found, f"{mesh_geom.path} is missing."
+      mesh_geom.ClearField("path")  # Clear the path.
 
   # TODO: more config validation
 
@@ -245,7 +231,7 @@ def validate_config(
 
     # insert material properties to colliders
     for c in b.colliders:
-      if not c.HasField('material'):
+      if not c.HasField("material"):
         c.material.friction = config.friction
         c.material.elasticity = config.elasticity
 

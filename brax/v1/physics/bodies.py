@@ -1,4 +1,4 @@
-# Copyright 2024 The Brax Authors.
+# Copyright 2022 The Brax Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,8 @@ class Body:
 
   def __init__(self, config: config_pb2.Config):
     self.idx = jp.arange(0, len(config.bodies))
-    self.inertia = 1. / jp.array([vec_to_arr(b.inertia) for b in config.bodies])
+    inertias = [jp.inv(jp.diag(vec_to_arr(b.inertia))) for b in config.bodies]
+    self.inertia = jp.array(inertias)
     self.mass = jp.array([b.mass for b in config.bodies])
     self.active = jp.array(
         [0.0 if b.frozen.all else 1.0 for b in config.bodies])
@@ -55,15 +56,12 @@ class Body:
       dP: An impulse to apply to this body
     """
     dvel = impulse / self.mass
-    dang = self.inertia * jp.cross(pos - qp.pos, impulse)
+    dang = jp.matmul(self.inertia, jp.cross(pos - qp.pos, impulse))
     return P(vel=dvel, ang=dang)
 
 
 def min_z(qp: QP, body: config_pb2.Body) -> float:
   """Returns the lowest z of all the colliders in a body."""
-  if not body.colliders:
-    return 0.0
-
   result = float('inf')
 
   for col in body.colliders:
@@ -95,4 +93,4 @@ def min_z(qp: QP, body: config_pb2.Body) -> float:
       # ignore planes and other stuff
       result = jp.amin(jp.array([result, 0.0]))
 
-  return result  # pytype: disable=bad-return-type  # jax-ndarray
+  return result

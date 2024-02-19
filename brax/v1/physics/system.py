@@ -1,4 +1,4 @@
-# Copyright 2024 The Brax Authors.
+# Copyright 2022 The Brax Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,32 +15,19 @@
 # pylint:disable=g-multiple-import
 """A brax system."""
 
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple
 
 from brax.v1 import jumpy as jp
 from brax.v1 import math
 from brax.v1 import pytree
-from brax.v1.experimental.tracing.customize import TracedConfig
 from brax.v1.physics import actuators
 from brax.v1.physics import bodies
 from brax.v1.physics import colliders
 from brax.v1.physics import config_pb2
 from brax.v1.physics import forces
-from brax.v1.physics import geometry
 from brax.v1.physics import integrators
 from brax.v1.physics import joints
-from brax.v1.physics import spring_joints
-from brax.v1.physics.base import Info, P, Q, QP, validate_config, vec_to_arr
-
-
-def _get_contact_info(
-    contact: Sequence[geometry.Contact]
-) -> Tuple[jp.ndarray, jp.ndarray, jp.ndarray]:
-  if not contact:
-    return jp.array([]), jp.array([]), jp.array([])
-  contact = jp.tree_map(jp.concatenate, contact)
-  contact = jp.tree_map(lambda *x: jp.concatenate(x), *contact)
-  return contact.pos, contact.normal, contact.penetration
+from brax.v1.physics.base import Info, P, QP, validate_config, vec_to_arr
 
 
 @pytree.register
@@ -52,60 +39,40 @@ class System:
 
   def __init__(self,
                config: config_pb2.Config,
-               resource_paths: Optional[Sequence[str]] = None,
-               post_process_fn: Optional[Callable[[config_pb2.Config],
-                                                  Union[config_pb2.Config,
-                                                        TracedConfig]]] = None):
-    config = validate_config(config, resource_paths=resource_paths)
-    if post_process_fn:
-      config = post_process_fn(config)
-
-    self.config = config
-    self.num_actuators = len(config.actuators)
-    self.num_joint_dof = sum(len(j.angle_limit) for j in config.joints)
+               resource_paths: Optional[Sequence[str]] = None):
+    self.config = validate_config(config, resource_paths=resource_paths)
     self.num_bodies = len(config.bodies)
     self.body = bodies.Body(config)
-    self.colliders = colliders.get(config, self.body)
+    self.integrator = integrators.Euler(self.config)
+    self.colliders = colliders.get(self.config, self.body)
     self.num_joints = len(config.joints)
-    self.joints = joints.get(config, self.body) + spring_joints.get(
-        config, self.body)
-    self.actuators = actuators.get(config, self.joints)
-    self.forces = forces.get(config, self.body)
+    self.joints = joints.get(self.config, self.body)
+    self.num_actuators = len(config.actuators)
+    self.num_joint_dof = sum(len(j.angle_limit) for j in config.joints)
+    self.actuators = actuators.get(self.config, self.joints)
+    self.forces = forces.get(self.config, self.body)
     self.num_forces_dof = sum(f.act_index.shape[-1] for f in self.forces)
-    self.integrator = integrators.Euler(config)
-    zero_p = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
-    info = self.info(self.default_qp())
-    self.zero_info = Info(
-        contact=zero_p,
-        joint=zero_p,
-        actuator=zero_p,
-        contact_pos=jp.zeros_like(info.contact_pos),
-        contact_normal=jp.zeros_like(info.contact_normal),
-        contact_penetration=-jp.ones_like(info.contact_penetration))
 
   def default_angle(self, default_index: int = 0) -> jp.ndarray:
     """Returns the default joint angles for the system."""
     if not self.config.joints:
       return jp.array([])
 
-    dofs = {}
-    for j in self.config.joints:
-      dofs[j.name] = sum([l.min != 0 or l.max != 0 for l in j.angle_limit])
+    dofs = {j.name: len(j.angle_limit) for j in self.config.joints}
     angles = {}
 
     # check overrides in config defaults
     if default_index < len(self.config.defaults):
       defaults = self.config.defaults[default_index]
       for ja in defaults.angles:
-        angles[ja.name] = vec_to_arr(ja.angle)[:dofs[ja.name]] * jp.pi / 180
+        arr = vec_to_arr(ja.angle)[:dofs[ja.name]] * jp.pi / 180
+        angles[ja.name] = arr
 
     # set remaining joint angles set from angle limits, and add jitter
     for joint in self.config.joints:
       if joint.name not in angles:
-        dof = dofs[joint.name]
-        angles[joint.name] = jp.array([
-            (l.min + l.max) * jp.pi / 360 for l in joint.angle_limit
-        ][:dof])
+        angle = [(l.min + l.max) * jp.pi / 360 for l in joint.angle_limit]
+        angles[joint.name] = jp.array(angle)
 
     return jp.concatenate([angles[j.name] for j in self.config.joints])
 
@@ -137,7 +104,7 @@ class System:
     joint_idxs = []
     for j in self.config.joints:
       beg = joint_idxs[-1][1][1] if joint_idxs else 0
-      dof = sum([l.min != 0 or l.max != 0 for l in j.angle_limit])
+      dof = len(j.angle_limit)
       joint_idxs.append((j, (beg, beg + dof)))
     lineage = {j.child: j.parent for j in self.config.joints}
     depth = {}
@@ -241,109 +208,17 @@ class System:
 
     return qp
 
-  def step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
-    """Generic step function.  Overridden with appropriate step at init."""
-    step_funs = {'pbd': self._pbd_step, 'legacy_spring': self._spring_step}
-    return step_funs[self.config.dynamics_mode](qp, act)
-
   def info(self, qp: QP) -> Info:
     """Return info about a system state."""
-    info_funs = {'pbd': self._pbd_info, 'legacy_spring': self._spring_info}
-    return info_funs[self.config.dynamics_mode](qp)
-
-  def _pbd_step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
-    """Position based dynamics stepping scheme."""
-
-    # Just like XPBD except performs two physics substeps per collision update.
-
-    def substep(carry, _):
-      qp, info = carry
-
-      # first substep without collisions
-      qprev = qp
-
-      # apply acceleration updates for actuators, and forces
-      zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
-      zero_q = Q(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 4)))
-      dp_a = sum([a.apply(qp, act) for a in self.actuators], zero)
-      dp_f = sum([f.apply(qp, act) for f in self.forces], zero)
-      dp_j = sum([j.damp(qp) for j in self.joints], zero)
-      qp = self.integrator.update(qp, acc_p=dp_a + dp_f + dp_j)
-
-      # apply kinetic step
-      qp = self.integrator.kinetic(qp)
-
-      # apply joint position update
-      dq_j = sum([j.apply(qp) for j in self.joints], zero_q)
-      qp = self.integrator.update(qp, pos_q=dq_j)
-
-      # apply pbd velocity projection
-      qp = self.integrator.velocity_projection(qp, qprev)
-
-      qprev = qp
-      # second substep with collisions
-
-      # apply acceleration updates for actuators, and forces
-      dp_a = sum([a.apply(qp, act) for a in self.actuators], zero)
-      dp_f = sum([f.apply(qp, act) for f in self.forces], zero)
-      dp_j = sum([j.damp(qp) for j in self.joints], zero)
-      qp = self.integrator.update(qp, acc_p=dp_a + dp_f + dp_j)
-
-      # apply kinetic step
-      qp = self.integrator.kinetic(qp)
-
-      # apply joint position update
-      dq_j = sum([j.apply(qp) for j in self.joints], zero_q)
-      qp = self.integrator.update(qp, pos_q=dq_j)
-
-      collide_data = [c.position_apply(qp, qprev) for c in self.colliders]
-      dq_c = sum([c[0] for c in collide_data], zero_q)
-      dlambda = [c[1] for c in collide_data]
-      contact = [c[2] for c in collide_data]
-      qp = self.integrator.update(qp, pos_q=dq_c)
-
-      # apply pbd velocity updates
-      qp_right_before = qp
-      qp = self.integrator.velocity_projection(qp, qprev)
-      # apply collision velocity updates
-      dp_c = sum([
-          c.velocity_apply(qp, dlambda[i], qp_right_before, contact[i])
-          for i, c in enumerate(self.colliders)
-      ], zero)
-      qp = self.integrator.update(qp, vel_p=dp_c)
-
-      info = Info(info.contact + dp_c, info.joint, info.actuator + dp_a,
-                  *_get_contact_info(contact))
-      return (qp, info), ()
-
-    # update collider statistics for culling
-    for c in self.colliders:
-      c.cull.update(qp)
-
-    info = self.zero_info
-    (qp, info), _ = jp.scan(substep, (qp, info), (), self.config.substeps // 2)
-    return qp, info
-
-  def _pbd_info(self, qp: QP) -> Info:
-    """Return info about a system state."""
-    zero_q = Q(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 4)))
     zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
 
-    # TODO: sort out a better way to get first-step collider data
-    for c in self.colliders:
-      c.cull.update(qp)
-    collider_data = [c.apply(qp) for c in self.colliders]
-    contact = [c[1] for c in collider_data]
-    dq_c = sum([c[0] for c in collider_data], zero)
-    dq_j = sum([j.apply(qp) for j in self.joints], zero_q)
-    info = Info(dq_c, dq_j, zero, *_get_contact_info(contact))
+    dp_c = sum([c.apply(qp) for c in self.colliders], zero)
+    dp_j = sum([j.apply(qp) for j in self.joints], zero)
+    info = Info(dp_c, dp_j, zero)
     return info
 
-  def _spring_step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
-    """Spring-based dynamics stepping scheme."""
-
-    # Resolves actuator forces, joints, and forces at acceleration level, and
-    # resolves collisions at velocity level with baumgarte stabilization.
+  def step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
+    """Calculates a physics step for a system, returns next state and info."""
 
     def substep(carry, _):
       qp, info = carry
@@ -351,40 +226,25 @@ class System:
       # apply kinetic step
       qp = self.integrator.kinetic(qp)
 
-      # apply acceleration level updates for joints, actuators, and forces
+      # apply impulses arising from joints and actuators
       zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
       dp_j = sum([j.apply(qp) for j in self.joints], zero)
       dp_a = sum([a.apply(qp, act) for a in self.actuators], zero)
       dp_f = sum([f.apply(qp, act) for f in self.forces], zero)
-      qp = self.integrator.update(qp, acc_p=dp_j + dp_a + dp_f)
+      qp = self.integrator.potential(qp, dp_j + dp_a + dp_f)
 
-      # apply velocity level updates for collisions
-      collider_data = [c.apply(qp) for c in self.colliders]
-      dp_c = sum([c[0] for c in collider_data], zero)
-      contact = [c[1] for c in collider_data]
-      qp = self.integrator.update(qp, vel_p=dp_c)
+      # apply collision velocity updates
+      dp_c = sum([c.apply(qp) for c in self.colliders], zero)
+      qp = self.integrator.potential_collision(qp, dp_c)
 
-      info = Info(info.contact + dp_c, info.joint + dp_j, info.actuator + dp_a,
-                  *_get_contact_info(contact))
+      info = Info(info.contact + dp_c, info.joint + dp_j, info.actuator + dp_a)
       return (qp, info), ()
 
     # update collider statistics for culling
     for c in self.colliders:
       c.cull.update(qp)
 
-    info = self.zero_info
+    zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
+    info = Info(contact=zero, joint=zero, actuator=zero)
     (qp, info), _ = jp.scan(substep, (qp, info), (), self.config.substeps)
     return qp, info
-
-  def _spring_info(self, qp: QP) -> Info:
-    """Return info about a system state."""
-    zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
-
-    for c in self.colliders:
-      c.cull.update(qp)
-    collider_data = [c.apply(qp) for c in self.colliders]
-    contact = [c[1] for c in collider_data]
-    dp_c = sum([c[0] for c in collider_data], zero)
-    dp_j = sum([j.apply(qp) for j in self.joints], zero)
-    info = Info(dp_c, dp_j, zero, *_get_contact_info(contact))
-    return info

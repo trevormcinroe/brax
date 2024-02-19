@@ -1,4 +1,4 @@
-# Copyright 2024 The Brax Authors.
+# Copyright 2022 The Brax Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@ from brax.v1.physics.base import P, QP
 class Actuator(abc.ABC):
   """Applies a torque to a joint."""
 
-  __pytree_ignore__ = ('act_index', 'act_mask')
-
   def __init__(self, joint: joints.Joint, actuators: List[config_pb2.Actuator],
                act_index: List[Tuple[int, int]]):
     """Creates an actuator that applies torque to a joint given an act array.
@@ -39,11 +37,9 @@ class Actuator(abc.ABC):
       actuators: list of actuators (all of the same type) to batch together
       act_index: indices from the act array that drive this Actuator
     """
-
     self.joint = jp.take(joint, [joint.index[a.joint] for a in actuators])
     self.strength = jp.array([a.strength for a in actuators])
     self.act_index = jp.array(act_index)
-    self.act_mask = jp.where(self.act_index >= 0, 1., 0.)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
   @abc.abstractmethod
   def apply_reduced(self, act: jp.ndarray, qp_p: QP, qp_c: QP) -> Tuple[P, P]:
@@ -61,12 +57,12 @@ class Actuator(abc.ABC):
     """
     qp_p = jp.take(qp, self.joint.body_p.idx)
     qp_c = jp.take(qp, self.joint.body_c.idx)
-    act = jp.take(act, self.act_index) * self.act_mask
+    act = jp.take(act, self.act_index)
     dang_p, dang_c = jp.vmap(type(self).apply_reduced)(self, act, qp_p, qp_c)
 
     # sum together all impulse contributions across parents and children
     body_idx = jp.concatenate((self.joint.body_p.idx, self.joint.body_c.idx))
-    dp_ang = jp.concatenate((dang_p, dang_c))  # pytype: disable=wrong-arg-types  # jax-ndarray
+    dp_ang = jp.concatenate((dang_p, dang_c))
     dp_ang = jp.segment_sum(dp_ang, body_idx, qp.pos.shape[0])
 
     return P(vel=jp.zeros_like(qp.vel), ang=dp_ang)
@@ -80,13 +76,14 @@ class Angle(Actuator):
     axis, angle = self.joint.axis_angle(qp_p, qp_c)
     axis, angle = jp.array(axis), jp.array(angle)
 
+    # torque grows as target angle diverges from current angle
     limit_min, limit_max = self.joint.limit[:, 0], self.joint.limit[:, 1]
     act = jp.clip(act * jp.pi / 180, limit_min, limit_max)
     torque = (act - angle) * self.strength
     torque = jp.sum(jp.vmap(jp.multiply)(axis, torque), axis=0)
 
-    dang_p = -self.joint.body_p.inertia * torque
-    dang_c = self.joint.body_c.inertia * torque
+    dang_p = jp.matmul(self.joint.body_p.inertia, -torque)
+    dang_c = jp.matmul(self.joint.body_c.inertia, torque)
 
     return dang_p, dang_c
 
@@ -102,12 +99,12 @@ class Torque(Actuator):
     # clip torque if outside joint angle limits
     # * -1. so that positive actuation increases angle between parent and child
     torque = act * self.strength * -1.
-    torque = jp.where(angle < self.joint.limit[:, 0], 0, torque)  # pytype: disable=wrong-arg-types  # jax-ndarray
-    torque = jp.where(angle > self.joint.limit[:, 1], 0, torque)  # pytype: disable=wrong-arg-types  # jax-ndarray
+    torque = jp.where(angle < self.joint.limit[:, 0], 0, torque)
+    torque = jp.where(angle > self.joint.limit[:, 1], 0, torque)
     torque = jp.sum(jp.vmap(jp.multiply)(axis, torque), axis=0)
 
-    dang_p = self.joint.body_p.inertia * torque
-    dang_c = -self.joint.body_c.inertia * torque
+    dang_p = jp.matmul(self.joint.body_p.inertia, torque)
+    dang_c = jp.matmul(self.joint.body_c.inertia, -torque)
 
     return dang_p, dang_c
 
@@ -122,28 +119,8 @@ def get(config: config_pb2.Config,
     if not joint:
       raise RuntimeError(f'joint not found: {actuator.joint}')
     joint = joint[0]
-    joint_idx = joint.index[actuator.joint]
-    if joint.free_dofs is not None:
-      # padding out act index with dummy indices
-      # e.g., suppose there are three joints with 1, 2, and 3 active degrees
-      # of freedom, which have all been sphericalized.  The action vector will
-      # have length 6, but needs to be unpacked into something with shape
-      # [3, 3], so that we vectorize over the three spherical joints.  thus, we
-      # construct a new tuple of indices that looks like:
-      # act_index:
-      # ( [0, -1, -1],
-      #   [1,  2, -1],
-      #   [3,  4,  5], )
-      # then, we can simply mask out the -1 indices at act time
-      free_dofs = joint.free_dofs[joint_idx]
-      act_index = tuple(i if i - current_index < free_dofs else -1
-                        for i in range(current_index, current_index +
-                                       joint.dof))
-      current_index += joint.free_dofs[joint_idx]
-    else:
-      act_index = tuple(range(current_index, current_index + joint.dof))
-      current_index += joint.dof
-
+    act_index = tuple(range(current_index, current_index + joint.dof))
+    current_index += joint.dof
     key = (actuator.WhichOneof('type'), joint.dof, joint)
     if key not in actuators:
       actuators[key] = []
