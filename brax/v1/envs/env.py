@@ -34,6 +34,8 @@ class State:
   done: jp.ndarray
   metrics: Dict[str, jp.ndarray] = struct.field(default_factory=dict)
   info: Dict[str, Any] = struct.field(default_factory=dict)
+  true_next_obs: Optional[jp.ndarray] = None
+  true_next_qp: Optional[jp.ndarray] = None
 
 
 @pytree.register

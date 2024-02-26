@@ -146,7 +146,10 @@ class AutoResetWrapper(brax_env.Wrapper):
 
     qp = jp.tree_map(where_done, state.info['first_qp'], state.qp)
     obs = where_done(state.info['first_obs'], state.obs)
-    return state.replace(qp=qp, obs=obs)
+    # Consider when the auto-reset occurs 1st idx is always the true state, 0th is the **resetted qp**
+    # This is useful because we can always query the "true*" entry with the "done" flag in state.done and get
+    # the *true* state of the env  without requiring the env to be reset manually
+    return state.replace(qp=qp, obs=obs, true_next_obs=[obs, state.obs], true_next_qp=[qp, state.qp])
 
 
 @flax.struct.dataclass
