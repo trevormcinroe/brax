@@ -128,6 +128,7 @@ class AutoResetWrapper(brax_env.Wrapper):
     state = self.env.reset(rng)
     state.info['first_qp'] = state.qp
     state.info['first_obs'] = state.obs
+    state = state.replace(true_next_obs=[state.obs, state.obs], true_next_qp=[state.qp, state.qp])
     return state
 
   def step(self, state: brax_env.State, action: jp.ndarray) -> brax_env.State:
