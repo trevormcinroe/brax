@@ -150,7 +150,7 @@ class AutoResetWrapper(brax_env.Wrapper):
     # Consider when the auto-reset occurs 1st idx is always the true state, 0th is the **resetted qp**
     # This is useful because we can always query the "true*" entry with the "done" flag in state.done and get
     # the *true* state of the env  without requiring the env to be reset manually
-    return state.replace(qp=qp, obs=obs, true_next_obs=[obs, state.obs*0.], true_next_qp=[qp, state.qp])
+    return state.replace(qp=qp, obs=obs, true_next_obs=[obs, state.obs], true_next_qp=[qp, state.qp])
 
 
 @flax.struct.dataclass
