@@ -35,7 +35,7 @@ class State:
   metrics: Dict[str, jp.ndarray] = struct.field(default_factory=dict)
   info: Dict[str, Any] = struct.field(default_factory=dict)
   true_next_obs: Optional[jp.ndarray] = jp.zeros((1,))
-  true_next_qp: Optional[jp.ndarry] = jp.zeros((1,))
+  true_next_qp: Optional[jp.ndarray] = jp.zeros((1,))
   # true_next_obs: Optional[jp.ndarray] = struct.field(default_factory=list)
   # true_next_qp: Optional[jp.ndarray] = struct.field(default_factory=list)
 
