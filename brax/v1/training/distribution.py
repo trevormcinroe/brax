@@ -107,6 +107,15 @@ class NormalDistribution:
     entropy = 0.5 + log_normalization
     return entropy * jnp.ones_like(self.loc)
 
+  def torchlike_logprob(self, value):
+    var = self.scale**2
+    log_scale = jnp.log(self.scale)
+    return (
+      -((value - self.loc) ** 2) / (2 * var)
+      - log_scale
+      - jnp.log(jnp.sqrt(2 * jnp.pi))
+    )
+
 
 class TanhBijector:
   """Tanh Bijector."""
