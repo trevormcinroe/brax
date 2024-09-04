@@ -149,7 +149,8 @@ def render_array(sys: brax.System,
                  light: Optional[Light] = None,
                  camera: Optional[Camera] = None,
                  ssaa: int = 2,
-                 offset: List = [0.0, 0.0, 0.0]) -> onp.ndarray:
+                 offset: List = [0.0, 0.0, 0.0],
+                 hfov: float =  58.0) -> onp.ndarray:
   """Renders an RGB array of a brax system and QP."""
   if (len(qp.pos.shape), len(qp.rot.shape)) != (2, 2):
     raise RuntimeError('unexpected shape in qp')
@@ -166,7 +167,7 @@ def render_array(sys: brax.System,
         shadowmap_center=target)
   if camera is None:
     eye, up = _eye(sys, qp), _up(sys)
-    hfov = 58.0
+    # hfov = 58.0
     vfov = hfov * height / width
     camera = Camera(
         viewWidth=width * ssaa,
