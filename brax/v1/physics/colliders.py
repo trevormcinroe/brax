@@ -25,6 +25,7 @@ from brax.v1 import math
 from brax.v1 import pytree
 from brax.v1.physics import bodies
 from brax.v1.physics import config_pb2
+from brax.v1.physics import geometry
 from brax.v1.physics.base import P, QP, vec_to_arr
 
 
@@ -622,7 +623,36 @@ def mesh_plane(mesh: Mesh, _: Plane, qp_a: QP, qp_b: QP) -> Contact:
   return Contact(pos, vel, normal, penetration)
 
 
-def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
+def capsule_mesh(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
+                 qp_b: QP) -> Contact:
+  """Returns the contacts for capsule-mesh collision."""
+
+  @jp.vmap
+  def capsule_face(faces, face_normals):
+    # Determine the capsule line.
+    a, b = _endpoints(cap.end, qp_a, cap.pos)
+    triangle_normal = math.rotate(face_normals, qp_b.rot)
+
+    pt = qp_b.pos + jp.vmap(math.rotate, include=[True, False])(faces, qp_b.rot)
+    p0, p1, p2 = pt[..., 0, :], pt[..., 1, :], pt[..., 2, :]
+
+    segment_p, triangle_p = geometry.closest_segment_triangle_points(
+        a, b, p0, p1, p2, triangle_normal)
+
+    penetration_vec = segment_p - triangle_p
+    dist = jp.safe_norm(penetration_vec)
+    normal = penetration_vec / (1e-6 + dist)
+    penetration = cap.radius - dist
+
+    pos = triangle_p
+    vel = qp_a.world_velocity(pos) - qp_b.world_velocity(pos)
+    return pos, vel, normal, penetration
+
+  pos, vel, normal, penetration = capsule_face(mesh.faces, mesh.face_normals)
+  return Contact(pos, vel, normal, penetration)
+
+
+def capsule_mesh2(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   """Returns the contacts for capsule-mesh collision."""
   # Determine the capsule line.
   a, b = _endpoints(cap.end, qp_a, cap.pos)
