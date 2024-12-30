@@ -623,7 +623,7 @@ def mesh_plane(mesh: Mesh, _: Plane, qp_a: QP, qp_b: QP) -> Contact:
   return Contact(pos, vel, normal, penetration)
 
 
-def capsule_mesh(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
+def capsule_mesh2(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
                  qp_b: QP) -> Contact:
   """Returns the contacts for capsule-mesh collision."""
 
@@ -667,8 +667,9 @@ def capsule_mesh2(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   print(f"mesh.faces: {mesh.faces} // {mesh.faces.shape}")
   print(f"mesh.normals: {mesh.face_normals} // {mesh.face_normals.shape}")
   
-  qqq
-  pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
+  #pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
+  pt = qp_b.pos + jp.vmap(math.rotate, include=[True, False])(mesh.faces, qp_b.rot)
+  
   p0, p1, p2 = pt[..., 0, :], pt[..., 1, :], pt[..., 2, :]
 
   t = jp.dot(normal, (p0 - a) / jp.abs(jp.dot(normal, capsule_normal)))
