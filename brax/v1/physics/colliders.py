@@ -630,7 +630,7 @@ def capsule_mesh(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
   @jp.vmap
   def capsule_face(faces, face_normals):
     # Determine the capsule line.
-    print(f"inside: {faces.shape} // {face_normals.shape}")
+    print(f"inside: {faces.shape} // {face_normals.shape} // {qp_b.rot.shape}")
     a, b = _endpoints(cap.end, qp_a, cap.pos)
     triangle_normal = math.rotate(face_normals, qp_b.rot)
 
@@ -665,6 +665,7 @@ def capsule_mesh2(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   
   print(f"qp_b.rot: {qp_b.rot.shape}")
   print(f"mesh.faces: {mesh.faces} // {mesh.faces.shape}")
+  print(f"mesh.normals: {mesh.face_normals} // {mesh.face_normals.shape}")
   
   qqq
   pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
