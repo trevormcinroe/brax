@@ -663,10 +663,6 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   # plane of the triangle.
   normal = math.rotate(mesh.face_normals, qp_b.rot)
   
-  print(f"qp_b.rot: {qp_b.rot.shape}")
-  print(f"mesh.faces: {mesh.faces} // {mesh.faces.shape}")
-  print(f"mesh.normals: {mesh.face_normals} // {mesh.face_normals.shape}")
-  
   #pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
   pt = qp_b.pos + jp.vmap(math.rotate, include=[True, False])(mesh.faces, qp_b.rot)
   
