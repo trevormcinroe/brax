@@ -653,7 +653,7 @@ def capsule_mesh2(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
   return Contact(pos, vel, normal, penetration)
 
 
-def capsule_mesh2(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
+def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   """Returns the contacts for capsule-mesh collision."""
   # Determine the capsule line.
   a, b = _endpoints(cap.end, qp_a, cap.pos)
