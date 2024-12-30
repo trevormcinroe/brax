@@ -631,7 +631,10 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   # Find the trace point, i.e. the intersection between the capsule line and the
   # plane of the triangle.
   normal = math.rotate(mesh.face_normals, qp_b.rot)
-
+  
+  print(f"qp_b.rot: {qp_b.rot.shape}")
+  print(f"mesh.faces: {mesh.faces.shape}")
+  qqq
   pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
   p0, p1, p2 = pt[..., 0, :], pt[..., 1, :], pt[..., 2, :]
 
