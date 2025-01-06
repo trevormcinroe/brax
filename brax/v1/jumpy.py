@@ -237,6 +237,8 @@ def arange(start: int, stop: int) -> ndarray:
 def dot(x: ndarray, y: ndarray) -> ndarray:
   """Returns dot product of two arrays."""
   print(f"{x} / {y} // {_which_np(x, y)} // {type(x)} - {type(y)}")
+
+  print(f"why does this only break from some module calls: {_which_np(x, y).dot(x, y)}")
   return _which_np(x, y).dot(x, y)
 
 
