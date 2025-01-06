@@ -211,11 +211,6 @@ class System:
   def info(self, qp: QP) -> Info:
     """Return info about a system state."""
     zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
-    print(f"zero: {zero}")
-    print(f"dp_c inputs:")
-    print(f"\tcolliders: {self.colliders}")
-    import jax.numpy as jnp
-    print(f"\tqp: {qp} // {jnp.isnan(qp.pos).sum()} // {jnp.isnan(qp.rot).sum()} // {jnp.isnan(qp.vel).sum()} // {jnp.isnan(qp.ang).sum()}")
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
     info = Info(dp_c, dp_j, zero)
