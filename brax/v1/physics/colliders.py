@@ -163,7 +163,14 @@ class Collider(abc.ABC):
     col_a, col_b = self.cull.get()
     qp_a = jp.take(qp, col_a.body.idx)
     qp_b = jp.take(qp, col_b.body.idx)
+    import jax.numpy as jnp
+    print(f"contact inputs:")
+    print(f"col_a: {col_a}")
+    print(f"col_b: {col_b}")
+    print(f"qp_a: {jnp.isnan(qp_a.pos).sum()} // {jnp.isnan(qp_a.rot).sum()} // {jnp.isnan(qp_a.vel).sum()} // {jnp.isnan(qp_a.ang).sum()}")
+    print(f"qp_b: {jnp.isnan(qp_b.pos).sum()} // {jnp.isnan(qp_b.rot).sum()} // {jnp.isnan(qp_b.vel).sum()} // {jnp.isnan(qp_b.ang).sum()}")
     contact = jp.vmap(self.contact_fn)(col_a, col_b, qp_a, qp_b)
+    qqq
     dp_a, dp_b = jp.vmap(self._contact)(col_a, col_b, qp_a, qp_b, contact)
 
     if dp_b is None:
@@ -663,6 +670,7 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   # plane of the triangle.
   normal = math.rotate(mesh.face_normals, qp_b.rot)
   
+  # CHANGE: SEE BELOW SWAP!
   #pt = qp_b.pos + math.rotate(mesh.faces, qp_b.rot)
   pt = qp_b.pos + jp.vmap(math.rotate, include=[True, False])(mesh.faces, qp_b.rot)
   
