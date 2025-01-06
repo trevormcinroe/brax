@@ -681,8 +681,9 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   print(f"p0: {p0}")
   print(f"a: {a}")
   print(f"capsule_normal: {capsule_normal}")
-  qqq
   t = jp.dot(normal, (p0 - a) / jp.abs(jp.dot(normal, capsule_normal)))
+  print(f"t: {t}")
+  qqq
   trace_pt = a + capsule_normal * t
 
   # Find the closest point on the triangle to the trace point. If the trace
