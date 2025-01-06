@@ -214,8 +214,8 @@ class System:
     print(f"zero: {zero}")
     print(f"dp_c inputs:")
     print(f"\tcolliders: {self.colliders}")
-    import jax.numpy as jp
-    print(f"\tqp: {qp} // {jp.isnan(qp.pos).sum()} // {jp.isnan(qp.rot).sum()} // {jp.isnan(vel).sum()} // {jp.isnan(qp.ang).sum()}")
+    import jax.numpy as jnp
+    print(f"\tqp: {qp} // {jnp.isnan(qp.pos).sum()} // {jnp.isnan(qp.rot).sum()} // {jnp.isnan(vel).sum()} // {jnp.isnan(qp.ang).sum()}")
     qqq
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
