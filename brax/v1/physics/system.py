@@ -216,10 +216,10 @@ class System:
     print(f"\tcolliders: {self.colliders}")
     import jax.numpy as jnp
     print(f"\tqp: {qp} // {jnp.isnan(qp.pos).sum()} // {jnp.isnan(qp.rot).sum()} // {jnp.isnan(qp.vel).sum()} // {jnp.isnan(qp.ang).sum()}")
-    qqq
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
     info = Info(dp_c, dp_j, zero)
+    qq
     return info
 
   def step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
