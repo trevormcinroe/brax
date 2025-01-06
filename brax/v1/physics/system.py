@@ -211,7 +211,11 @@ class System:
   def info(self, qp: QP) -> Info:
     """Return info about a system state."""
     zero = P(jp.zeros((self.num_bodies, 3)), jp.zeros((self.num_bodies, 3)))
-
+    print(f"zero: {zero}")
+    print(f"dp_c inputs:")
+    print(f"\tcolliders: {self.colliders}")
+    print(f"\tqp: {qp}")
+    qqq
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
     info = Info(dp_c, dp_j, zero)
