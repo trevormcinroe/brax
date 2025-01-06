@@ -90,6 +90,8 @@ def vmap(fun: F, include: Optional[Sequence[bool]] = None) -> F:
           b_args.append(take(a, b_idx))  # pytype: disable=wrong-arg-types  # jax-ndarray
         else:
           b_args.append(a)
+      print(f"fun: {fun}")
+      print(f"b_args: {b_args}")
       rets.append(fun(*b_args))
 
     np = _which_np(*rets)
