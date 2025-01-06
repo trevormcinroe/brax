@@ -214,7 +214,7 @@ class System:
     print(f"zero: {zero}")
     print(f"dp_c inputs:")
     print(f"\tcolliders: {self.colliders}")
-    print(f"\tqp: {qp}")
+    print(f"\tqp: {qp} // {jp.isnan(qp.pos).sum()} // {jp.isnan(qp.rot).sum()} // {jp.isnan(vel).sum()} // {jp.isnan(qp.ang).sum()}")
     qqq
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
