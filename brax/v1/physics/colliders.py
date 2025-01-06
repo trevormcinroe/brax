@@ -684,6 +684,8 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
 
   # one of the below dotprods is producing a NaN
   print(f"norm/cap_norm: {jp.dot(normal, capsule_normal)} // {jp.abs(jp.dot(normal, capsule_normal))}")
+  print(f"testing outside: {jp.dot(jnp.array([0., -1., 0.]),  jnp.array([-jnp.inf, jnp.inf, -jnp.inf]))}")
+  qqq
   t = jp.dot(normal, (p0 - a) / jp.abs(jp.dot(normal, capsule_normal)))
   print(f"t: {t}")
   qqq
