@@ -90,8 +90,6 @@ def vmap(fun: F, include: Optional[Sequence[bool]] = None) -> F:
           b_args.append(take(a, b_idx))  # pytype: disable=wrong-arg-types  # jax-ndarray
         else:
           b_args.append(a)
-      print(f"fun: {fun}")
-      print(f"b_args: {b_args}")
       rets.append(fun(*b_args))
 
     np = _which_np(*rets)
@@ -238,7 +236,7 @@ def arange(start: int, stop: int) -> ndarray:
 
 def dot(x: ndarray, y: ndarray) -> ndarray:
   """Returns dot product of two arrays."""
-  print(f"{x} / {y} // {_which_np(x, y)}")
+  print(f"{x} / {y} // {_which_np(x, y)} // {type(x)} - {type(y)}")
   return _which_np(x, y).dot(x, y)
 
 
