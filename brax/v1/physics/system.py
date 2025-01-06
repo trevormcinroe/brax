@@ -214,7 +214,6 @@ class System:
     dp_c = sum([c.apply(qp) for c in self.colliders], zero)
     dp_j = sum([j.apply(qp) for j in self.joints], zero)
     info = Info(dp_c, dp_j, zero)
-    qq
     return info
 
   def step(self, qp: QP, act: jp.ndarray) -> Tuple[QP, Info]:
