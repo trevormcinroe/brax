@@ -60,10 +60,7 @@ class Env(abc.ABC):
   def observation_size(self) -> int:
     """The size of the observation vector returned in step and reset."""
     rng = jp.random_prngkey(0)
-    print(f"rng: {rng}")
     reset_state = self.unwrapped.reset(rng)
-    print(f"reset_state: {reset_state} // {reset_state.obs.shape}")
-    qqq
     return reset_state.obs.shape[-1]
 
   @property
