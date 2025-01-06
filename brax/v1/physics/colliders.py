@@ -163,14 +163,7 @@ class Collider(abc.ABC):
     col_a, col_b = self.cull.get()
     qp_a = jp.take(qp, col_a.body.idx)
     qp_b = jp.take(qp, col_b.body.idx)
-    import jax.numpy as jnp
-    print(f"contact inputs:")
-    print(f"col_a: {col_a}")
-    print(f"col_b: {col_b}")
-    print(f"qp_a: {jnp.isnan(qp_a.pos).sum()} // {jnp.isnan(qp_a.rot).sum()} // {jnp.isnan(qp_a.vel).sum()} // {jnp.isnan(qp_a.ang).sum()}")
-    print(f"qp_b: {jnp.isnan(qp_b.pos).sum()} // {jnp.isnan(qp_b.rot).sum()} // {jnp.isnan(qp_b.vel).sum()} // {jnp.isnan(qp_b.ang).sum()}")
     contact = jp.vmap(self.contact_fn)(col_a, col_b, qp_a, qp_b)
-    qqq
     dp_a, dp_b = jp.vmap(self._contact)(col_a, col_b, qp_a, qp_b, contact)
 
     if dp_b is None:
@@ -637,7 +630,6 @@ def capsule_mesh2(cap: geometry.Capsule, mesh: geometry.BaseMesh, qp_a: QP,
   @jp.vmap
   def capsule_face(faces, face_normals):
     # Determine the capsule line.
-    print(f"inside: {faces.shape} // {face_normals.shape} // {qp_b.rot.shape}")
     a, b = _endpoints(cap.end, qp_a, cap.pos)
     triangle_normal = math.rotate(face_normals, qp_b.rot)
 
@@ -676,19 +668,7 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   
   p0, p1, p2 = pt[..., 0, :], pt[..., 1, :], pt[..., 2, :]
   
-  import jax.numpy as jnp
-  print(f"normal: {normal}")
-  print(f"p0: {p0}")
-  print(f"a: {a}")
-  print(f"capsule_normal: {capsule_normal}")
-
-  # one of the below dotprods is producing a NaN
-  print(f"norm/cap_norm: {jp.dot(normal, capsule_normal)} // {jp.abs(jp.dot(normal, capsule_normal))}")
-  print(f"testing outside: {jp.dot(jnp.array([0., -1., 0.]),  jnp.array([-jnp.inf, jnp.inf, -jnp.inf]))}")
-  qqq
   t = jp.dot(normal, (p0 - a) / jp.abs(jp.dot(normal, capsule_normal)))
-  print(f"t: {t}")
-  qqq
   trace_pt = a + capsule_normal * t
 
   # Find the closest point on the triangle to the trace point. If the trace
