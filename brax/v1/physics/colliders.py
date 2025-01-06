@@ -675,7 +675,13 @@ def capsule_mesh(cap: Capsule, mesh: BaseMesh, qp_a: QP, qp_b: QP) -> Contact:
   pt = qp_b.pos + jp.vmap(math.rotate, include=[True, False])(mesh.faces, qp_b.rot)
   
   p0, p1, p2 = pt[..., 0, :], pt[..., 1, :], pt[..., 2, :]
-
+  
+  import jax.numpy as jnp
+  print(f"normal: {normal}")
+  print(f"p0: {p0}")
+  print(f"a: {a}")
+  print(f"capsule_normal: {capsule_normal}")
+  qqq
   t = jp.dot(normal, (p0 - a) / jp.abs(jp.dot(normal, capsule_normal)))
   trace_pt = a + capsule_normal * t
 
